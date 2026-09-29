@@ -1,6 +1,9 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+import { SHOPEE_CACHE_SECONDS, TAGS } from "@/lib/cache";
+import { createAnonClient } from "@/lib/supabase/server";
 import { SORT_OPTIONS, type ShopeeOffer, type SortKey } from "@/lib/shopee-shared";
 
 export * from "@/lib/shopee-shared";
@@ -24,6 +27,43 @@ export async function getShopeeCredentials(supabase: SupabaseClient): Promise<Sh
   const map = Object.fromEntries((data ?? []).map((r) => [r.key, r.value]));
   if (!map.shopee_app_id || !map.shopee_secret) return null;
   return { appId: map.shopee_app_id, secret: map.shopee_secret };
+}
+
+/**
+ * Credenciais para o servidor do site (visitante não está logado): liberadas pelo banco
+ * só para quem tem o SERVER_SECRET, que existe apenas nas variáveis da Vercel.
+ */
+async function getServerShopeeCredentials(): Promise<ShopeeCredentials | null> {
+  const token = process.env.SERVER_SECRET;
+  if (!token) return null;
+  const { data } = await createAnonClient().rpc("server_shopee_credentials", { p_token: token });
+  const row = (data as { app_id: string | null; secret: string | null }[] | null)?.[0];
+  return row?.app_id && row.secret ? { appId: row.app_id, secret: row.secret } : null;
+}
+
+const cachedPublicOffers = unstable_cache(
+  async (params: { keyword: string; sort: SortKey; page: number; limit: number }) => {
+    const creds = await getServerShopeeCredentials();
+    // Sem conta conectada: guarda "null" no cache; conectar a conta limpa a tag "shopee".
+    if (!creds) return null;
+    return searchOffers(creds, params); // erro não entra no cache: a próxima visita tenta de novo
+  },
+  ["public-offers"],
+  { tags: [TAGS.shopee], revalidate: SHOPEE_CACHE_SECONDS },
+);
+
+/**
+ * Ofertas da Shopee para a vitrine pública, em cache por 1 hora por combinação de parâmetros.
+ * Nada é guardado no banco. Retorna null se a Shopee não estiver conectada ou der erro,
+ * para a página simplesmente esconder a seção.
+ */
+export async function getPublicOffers(params: { keyword: string; sort: SortKey; page: number; limit: number }) {
+  try {
+    return await cachedPublicOffers(params);
+  } catch (e) {
+    console.error("[shopee]", e);
+    return null;
+  }
 }
 
 async function graphql<T>(creds: ShopeeCredentials, query: string): Promise<T> {

@@ -11,12 +11,9 @@ export type ProductRow = {
   store: StoreId;
   category: string;
   affiliate_url: string;
-  source_url: string | null;
   shopee_shop_id: number | null;
   shopee_item_id: number | null;
   commission_rate: number | null;
-  sales: number | null;
-  rating: number | null;
   featured: boolean;
   active: boolean;
   price_checked_at: string | null;
@@ -31,6 +28,9 @@ export type Product = Pick<
 >;
 
 export const PUBLIC_COLUMNS = "id, slug, title, image_url, price, original_price, store, category, featured";
+
+/** Produtos por página, na vitrine e no painel. */
+export const PAGE_SIZE = 50;
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 

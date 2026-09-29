@@ -6,7 +6,7 @@ export default async function SettingsPage() {
   const { supabase, user } = await requireAdmin();
 
   return (
-    <div className="grid max-w-2xl gap-6">
+    <div className="mx-auto grid w-full max-w-2xl gap-6">
       <h1 className="text-xl font-semibold">Configurações</h1>
       <ShopeeCredentialsForm connected={await isShopeeConnected(supabase)} />
       <PasswordForm email={user.email ?? ""} />

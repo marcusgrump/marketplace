@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Pagination, withParams } from "@/components/Pagination";
 import { CuratedGrid, OffersSkeleton } from "@/components/store/grids";
@@ -35,8 +35,8 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   // Página além da última: a consulta volta vazia, então descobre o total pela primeira página.
   if (!products.length && page > 1) {
     const { total: realTotal } = await getProductsPage({ q, category, store, page: 1 });
-    if (!realTotal) notFound();
-    redirect(withParams("/", current, { pagina: Math.ceil(realTotal / PAGE_SIZE) }));
+    // Sem nenhum resultado: volta para a página 1, que mostra "Nenhum produto encontrado".
+    redirect(withParams("/", current, { pagina: realTotal ? Math.ceil(realTotal / PAGE_SIZE) : undefined }));
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);

@@ -2,28 +2,27 @@ import { discountPercent, formatPrice, type Product } from "@/lib/products";
 import { stores } from "@/lib/site";
 
 export function ProductCard({ product: p }: { product: Product }) {
-  const store = stores[p.loja];
+  const store = stores[p.store];
   const discount = discountPercent(p);
 
   return (
     <a
-      href={`/go/${p.id}`}
+      href={`/go/${p.slug}`}
       target="_blank"
       rel="nofollow sponsored noopener"
-      className="group flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
-      <div className="relative aspect-square bg-gray-100">
-        {p.imagem ? (
+      <div className="relative aspect-square bg-muted">
+        {p.image_url ? (
           // <img> simples: aceita imagem de qualquer loja sem configurar domínios.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.imagem} alt={p.titulo} loading="lazy" className="h-full w-full object-cover" />
+          <img src={p.image_url} alt={p.title} loading="lazy" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-gray-400">
-            {p.categoria}
+          <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
+            {p.category}
           </div>
         )}
         {discount && (
-          <span className="absolute right-2 top-2 rounded bg-brand px-1.5 py-0.5 text-xs font-bold text-white">
+          <span className="absolute right-2 top-2 rounded bg-primary px-1.5 py-0.5 text-xs font-bold text-primary-foreground">
             -{discount}%
           </span>
         )}
@@ -36,13 +35,13 @@ export function ProductCard({ product: p }: { product: Product }) {
       </div>
 
       <div className="flex flex-1 flex-col p-3">
-        <h2 className="line-clamp-2 text-sm text-gray-800">{p.titulo}</h2>
+        <h2 className="line-clamp-2 text-sm">{p.title}</h2>
         <div className="mt-auto pt-2">
-          {p.precoAntigo && discount && (
-            <p className="text-xs text-gray-400 line-through">{formatPrice(p.precoAntigo)}</p>
+          {p.original_price && discount && (
+            <p className="text-xs text-muted-foreground line-through">{formatPrice(p.original_price)}</p>
           )}
-          <p className="text-lg font-bold text-brand">{formatPrice(p.preco)}</p>
-          <span className="mt-2 block rounded bg-brand py-2 text-center text-sm font-semibold text-white group-hover:bg-brand-dark">
+          <p className="text-lg font-bold text-primary">{formatPrice(p.price)}</p>
+          <span className="mt-2 block rounded-lg bg-primary py-2 text-center text-sm font-semibold text-primary-foreground group-hover:bg-brand-dark">
             Ver oferta
           </span>
         </div>

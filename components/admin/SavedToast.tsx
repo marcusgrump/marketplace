@@ -19,8 +19,10 @@ export function SavedToast() {
   useEffect(() => {
     if (!saved) return;
     toast.success(messages[saved] ?? "Salvo.");
-    router.replace(pathname, { scroll: false });
-  }, [saved, router, pathname]);
+    const rest = new URLSearchParams(params);
+    rest.delete("salvo");
+    router.replace(rest.size ? `${pathname}?${rest}` : pathname, { scroll: false });
+  }, [saved, params, router, pathname]);
 
   return null;
 }

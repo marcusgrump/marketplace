@@ -20,12 +20,9 @@ type Fields = {
   store: string;
   category: string;
   affiliate_url: string;
-  source_url: string;
   shopee_shop_id: string;
   shopee_item_id: string;
   commission_rate: string;
-  sales: string;
-  rating: string;
   featured: boolean;
   active: boolean;
 };
@@ -41,12 +38,9 @@ function toFields(p?: ProductRow): Fields {
     store: p?.store ?? "shopee",
     category: p?.category ?? "",
     affiliate_url: p?.affiliate_url ?? "",
-    source_url: p?.source_url ?? "",
     shopee_shop_id: str(p?.shopee_shop_id),
     shopee_item_id: str(p?.shopee_item_id),
     commission_rate: p?.commission_rate != null ? String(Math.round(p.commission_rate * 1000) / 10) : "",
-    sales: str(p?.sales),
-    rating: str(p?.rating),
     featured: p?.featured ?? false,
     active: p?.active ?? true,
   };
@@ -84,12 +78,9 @@ export function ProductForm({ product, categories }: { product?: ProductRow; cat
         original_price: str(p.original_price),
         store: "shopee",
         affiliate_url: p.affiliate_url,
-        source_url: p.source_url,
         shopee_shop_id: String(p.shopee_shop_id),
         shopee_item_id: String(p.shopee_item_id),
         commission_rate: String(Math.round(p.commission_rate * 1000) / 10),
-        sales: String(p.sales),
-        rating: String(p.rating),
       }));
       setPriceChecked(true);
       setLookupMsg({
@@ -102,11 +93,8 @@ export function ProductForm({ product, categories }: { product?: ProductRow; cat
       <form action={action} className="grid gap-6">
         {product && <input type="hidden" name="id" value={product.id} />}
         {priceChecked && <input type="hidden" name="price_checked" value="1" />}
-        <input type="hidden" name="source_url" value={f.source_url} />
         <input type="hidden" name="shopee_shop_id" value={f.shopee_shop_id} />
         <input type="hidden" name="shopee_item_id" value={f.shopee_item_id} />
-        <input type="hidden" name="sales" value={f.sales} />
-        <input type="hidden" name="rating" value={f.rating} />
         <input type="hidden" name="store" value={f.store} />
 
         <Card>

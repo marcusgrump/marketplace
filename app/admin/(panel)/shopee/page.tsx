@@ -26,9 +26,6 @@ export default async function ShopeePage() {
     );
   }
 
-  const { data } = await supabase.from("products").select("shopee_item_id").not("shopee_item_id", "is", null);
-  const existing = (data ?? []).map((r) => Number(r.shopee_item_id));
-
   return (
     <div className="grid gap-6">
       <div>
@@ -38,7 +35,7 @@ export default async function ShopeePage() {
           <b className="text-foreground">Recomendado</b> têm comissão de 8%+, 100+ vendas e nota 4,5+.
         </p>
       </div>
-      <ShopeeSearch categories={await getCategories(supabase)} existing={existing} />
+      <ShopeeSearch categories={await getCategories(supabase)} />
     </div>
   );
 }

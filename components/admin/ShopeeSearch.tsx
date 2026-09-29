@@ -13,14 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatPercent, formatPrice } from "@/lib/products";
 import { isRecommended, SORT_OPTIONS, type ShopeeOffer, type SortKey } from "@/lib/shopee-shared";
 
-export function ShopeeSearch({ categories, existing }: { categories: string[]; existing: number[] }) {
+export function ShopeeSearch({ categories }: { categories: string[] }) {
   const [keyword, setKeyword] = useState("");
   const [sort, setSort] = useState<SortKey>("comissao");
   const [category, setCategory] = useState("");
   const [offers, setOffers] = useState<ShopeeOffer[]>([]);
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(false);
-  const [added, setAdded] = useState(() => new Set(existing));
+  const [added, setAdded] = useState<Set<number>>(() => new Set());
   const [searched, setSearched] = useState(false);
   const [searching, startSearch] = useTransition();
   const [importing, startImport] = useTransition();
@@ -35,6 +35,8 @@ export function ShopeeSearch({ categories, existing }: { categories: string[]; e
       setOffers((prev) => (nextPage === 1 ? r.offers : [...prev, ...r.offers]));
       setPage(nextPage);
       setHasNext(r.hasNextPage);
+      // Marca como "No site" o que já está cadastrado (checado só para os itens do resultado).
+      setAdded((prev) => new Set([...prev, ...r.existingIds]));
       setSearched(true);
     });
 

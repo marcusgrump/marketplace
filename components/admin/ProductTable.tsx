@@ -26,7 +26,16 @@ import { stores } from "@/lib/site";
 
 type Flag = "active" | "featured";
 
-export function ProductTable({ products, clicks }: { products: ProductRow[]; clicks: Record<string, number> }) {
+/** Lista de uma página de produtos. `clicks` é por id do produto; `empty` aparece quando a página fica vazia. */
+export function ProductTable({
+  products,
+  clicks,
+  empty,
+}: {
+  products: ProductRow[];
+  clicks: Record<string, number>;
+  empty: React.ReactNode;
+}) {
   const [, start] = useTransition();
   const [optimistic, setOptimistic] = useOptimistic(
     products,
@@ -58,9 +67,7 @@ export function ProductTable({ products, clicks }: { products: ProductRow[]; cli
 
   if (optimistic.length === 0) {
     return (
-      <Card className="items-center py-12 text-center text-muted-foreground">
-        Nenhum produto ainda. Clique em &quot;Buscar na Shopee&quot; ou &quot;Novo produto&quot;.
-      </Card>
+      <Card className="items-center gap-3 py-12 text-center text-muted-foreground">{empty}</Card>
     );
   }
 

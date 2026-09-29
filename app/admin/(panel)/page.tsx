@@ -1,38 +1,87 @@
 import Link from "next/link";
+import Form from "next/form";
+import { redirect } from "next/navigation";
 import { PlusIcon, SearchIcon } from "lucide-react";
+import { cn } from "cn";
 import { ProductTable } from "@/components/admin/ProductTable";
 import { RefreshPricesButton } from "@/components/admin/RefreshPricesButton";
 import { SavedToast } from "@/components/admin/SavedToast";
+import { Pagination, withParams } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { isShopeeConnected } from "@/lib/admin";
+import { Input } from "@/components/ui/input";
+import {
+  buildTips,
+  escapeLike,
+  getCatalogSummary,
+  getClickStats,
+  getClickTotals,
+  getSections,
+  isShopeeConnected,
+} from "@/lib/admin";
 import { requireAdmin } from "@/lib/auth";
-import type { ProductRow } from "@/lib/products";
+import { PAGE_SIZE, type ProductRow } from "@/lib/products";
 
-const DAY = 24 * 60 * 60 * 1000;
-const STALE_DAYS = 7;
+const STATUS = { todos: "Todos", ativos: "No ar", inativos: "Fora do ar" } as const;
+type Status = keyof typeof STATUS;
 
-export default async function AdminHome() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function AdminHome({ searchParams }: { searchParams: SearchParams }) {
   const { supabase } = await requireAdmin();
-  const since = (days: number) => new Date(Date.now() - days * DAY).toISOString();
-  const countClicks = (days: number) =>
-    supabase.from("clicks").select("id", { count: "exact", head: true }).gte("created_at", since(days));
+  const sp = await searchParams;
+  const param = (key: string) => {
+    const v = sp[key];
+    return (Array.isArray(v) ? v[0] : v) ?? "";
+  };
+  const q = param("q").trim().slice(0, 100);
+  const status: Status = Object.hasOwn(STATUS, param("status")) ? (param("status") as Status) : "todos";
+  const page = Math.max(1, Math.floor(Number(param("pagina"))) || 1);
+  const current = { q: q || undefined, status: status === "todos" ? undefined : status };
+  const href = (changes: Record<string, string | number | undefined>) => withParams("/admin", current, changes);
 
-  const [{ data: rows }, { data: stats }, day, week, month, shopeeConnected] = await Promise.all([
-    supabase.from("products").select("*").order("created_at", { ascending: false }),
-    supabase.rpc("click_stats", { p_days: 30 }),
-    countClicks(1),
-    countClicks(7),
-    countClicks(30),
+  const filtered = (head: boolean) => {
+    let query = supabase.from("products").select("*", { count: "exact", head });
+    if (q) query = query.ilike("title", `%${escapeLike(q)}%`);
+    if (status !== "todos") query = query.eq("active", status === "ativos");
+    return query;
+  };
+  const from = (page - 1) * PAGE_SIZE;
+
+  const [list, summary, totals, shopeeConnected, sections] = await Promise.all([
+    filtered(false)
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1),
+    getCatalogSummary(supabase),
+    getClickTotals(supabase),
     isShopeeConnected(supabase),
+    getSections(supabase),
   ]);
 
-  const products = (rows ?? []) as ProductRow[];
-  const clicks = Object.fromEntries(
-    ((stats ?? []) as { product_id: string; clicks: number }[]).map((s) => [s.product_id, Number(s.clicks)]),
-  );
-  const tips = buildTips(products, clicks, shopeeConnected);
-  const hasShopeeProducts = products.some((p) => p.shopee_item_id);
+  // Página além da última (ex.: depois de excluir produtos): o banco responde erro de intervalo.
+  let found = list.count ?? 0;
+  if (list.error || (page > 1 && !list.data?.length)) {
+    if (list.error && list.error.code !== "PGRST103") throw new Error(`Falha ao carregar produtos: ${list.error.message}`);
+    found = (await filtered(true)).count ?? 0;
+  }
+  const totalPages = Math.max(1, Math.ceil(found / PAGE_SIZE));
+  if (page > totalPages) redirect(href({ pagina: totalPages }));
+
+  const products = (list.data ?? []) as ProductRow[];
+  // Só as origens necessárias: produtos desta página, todas as seções e a busca.
+  const clicks = await getClickStats(supabase, 30, [
+    ...products.map((p) => `p:${p.id}`),
+    ...sections.map((s) => `s:${s.id}`),
+    "busca",
+  ]);
+  const pageClicks = Object.fromEntries(products.map((p) => [p.id, clicks[`p:${p.id}`] ?? 0]));
+  const tips = buildTips({ summary, sections, clicks, shopeeConnected });
+  const counts: Record<Status, number> = {
+    todos: summary.total,
+    ativos: summary.active,
+    inativos: summary.total - summary.active,
+  };
 
   return (
     <div className="grid gap-6">
@@ -40,7 +89,7 @@ export default async function AdminHome() {
 
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="mr-auto text-xl font-semibold">Produtos</h1>
-        {shopeeConnected && hasShopeeProducts && <RefreshPricesButton />}
+        {shopeeConnected && summary.shopee > 0 && <RefreshPricesButton />}
         <Button variant="outline" asChild>
           <Link href="/admin/shopee">
             <SearchIcon /> Buscar na Shopee
@@ -54,10 +103,10 @@ export default async function AdminHome() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Produtos no ar" value={products.filter((p) => p.active).length} />
-        <Stat label="Cliques em 24h" value={day.count ?? 0} />
-        <Stat label="Cliques em 7 dias" value={week.count ?? 0} />
-        <Stat label="Cliques em 30 dias" value={month.count ?? 0} />
+        <Stat label="Produtos no ar" value={summary.active} />
+        <Stat label="Cliques hoje" value={totals.today} />
+        <Stat label="Cliques em 7 dias" value={totals.week} />
+        <Stat label="Cliques em 30 dias" value={totals.month} />
       </div>
 
       {tips.length > 0 && (
@@ -89,9 +138,80 @@ export default async function AdminHome() {
         </Card>
       )}
 
-      <ProductTable products={products} clicks={clicks} />
+      {summary.total > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <nav className="mr-auto flex flex-wrap gap-1 text-sm" aria-label="Filtrar por status">
+            {(Object.keys(STATUS) as Status[]).map((s) => (
+              <Link
+                key={s}
+                href={withParams("/admin", { q: current.q }, { status: s === "todos" ? undefined : s })}
+                aria-current={s === status ? "page" : undefined}
+                className={cn(
+                  "rounded-full border px-3 py-1 transition-colors",
+                  s === status ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:border-primary",
+                )}
+              >
+                {STATUS[s]}
+                {!q && <span className="ml-1 tabular-nums opacity-70">{counts[s].toLocaleString("pt-BR")}</span>}
+              </Link>
+            ))}
+          </nav>
+          <Form action="/admin" className="flex gap-2">
+            {current.status && <input type="hidden" name="status" value={current.status} />}
+            <Input key={q} name="q" type="search" defaultValue={q} placeholder="Buscar pelo nome" className="w-56" />
+            <Button type="submit" variant="outline">
+              <SearchIcon /> Buscar
+            </Button>
+          </Form>
+        </div>
+      )}
+
+      {q && found > 0 && (
+        <p className="-mt-3 text-sm text-muted-foreground">
+          {found.toLocaleString("pt-BR")} resultado(s) para &quot;{q}&quot;.{" "}
+          <Link href={href({ q: undefined })} className="font-medium text-primary hover:underline">
+            Limpar busca
+          </Link>
+        </p>
+      )}
+
+      <div>
+        <ProductTable
+          products={products}
+          clicks={pageClicks}
+          empty={<EmptyState total={summary.total} q={q} status={status} clearHref={href({ q: undefined })} />}
+        />
+        <Pagination page={page} totalPages={totalPages} hrefFor={(p) => href({ pagina: p })} />
+      </div>
     </div>
   );
+}
+
+function EmptyState({ total, q, status, clearHref }: { total: number; q: string; status: Status; clearHref: string }) {
+  if (total === 0) {
+    return (
+      <p>
+        Nenhum produto ainda. Clique em &quot;Buscar na Shopee&quot; ou &quot;Novo produto&quot;, ou monte a{" "}
+        <Link href="/admin/vitrine" className="font-medium text-primary hover:underline">
+          vitrine automática
+        </Link>
+        .
+      </p>
+    );
+  }
+  if (q) {
+    return (
+      <>
+        <p>
+          Nenhum produto {status === "todos" ? "" : `${STATUS[status].toLowerCase()} `}encontrado para &quot;{q}&quot;.
+        </p>
+        <Link href={clearHref} className="font-medium text-primary hover:underline">
+          Limpar busca
+        </Link>
+      </>
+    );
+  }
+  return <p>{status === "todos" ? "Nenhum produto nesta página." : `Nenhum produto ${STATUS[status].toLowerCase()}.`}</p>;
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
@@ -103,59 +223,4 @@ function Stat({ label, value }: { label: string; value: number }) {
       </CardContent>
     </Card>
   );
-}
-
-type Tip = { text: string; href?: string; cta?: string };
-
-function buildTips(products: ProductRow[], clicks: Record<string, number>, shopeeConnected: boolean): Tip[] {
-  const tips: Tip[] = [];
-  const active = products.filter((p) => p.active);
-
-  if (!shopeeConnected) {
-    tips.push({
-      text: "Conecte sua conta de afiliado da Shopee para buscar produtos com comissão e importar com 1 clique.",
-      href: "/admin/configuracoes",
-      cta: "Conectar",
-    });
-  }
-  if (products.length === 0) {
-    tips.push({
-      text: "Comece com 10 a 20 produtos de categorias que seu público compra. Qualidade vale mais que quantidade.",
-      href: shopeeConnected ? "/admin/shopee" : "/admin/produtos/novo",
-      cta: "Adicionar produtos",
-    });
-    return tips;
-  }
-
-  const noImage = active.filter((p) => !p.image_url).length;
-  if (noImage) tips.push({ text: `${noImage} produto(s) sem foto. Produtos com foto recebem muito mais cliques.` });
-
-  const featured = active.filter((p) => p.featured).length;
-  if (featured === 0 && active.length >= 4) {
-    tips.push({ text: "Nenhum produto em destaque. Destaque de 4 a 8 ofertas para aparecerem no topo do site." });
-  }
-
-  const lowCommission = active.filter((p) => p.commission_rate !== null && p.commission_rate < 0.05).length;
-  if (lowCommission) {
-    tips.push({
-      text: `${lowCommission} produto(s) com comissão abaixo de 5%. Vale procurar um similar com comissão maior.`,
-      href: shopeeConnected ? "/admin/shopee" : undefined,
-      cta: "Buscar alternativas",
-    });
-  }
-
-  const staleCutoff = Date.now() - STALE_DAYS * DAY;
-  const stale = active.filter(
-    (p) => p.shopee_item_id && (!p.price_checked_at || new Date(p.price_checked_at).getTime() < staleCutoff),
-  ).length;
-  if (stale && shopeeConnected) {
-    tips.push({ text: `${stale} produto(s) com preço conferido há mais de ${STALE_DAYS} dias. Clique em "Atualizar preços".` });
-  }
-
-  const cold = active.filter((p) => !clicks[p.id] && new Date(p.created_at).getTime() < staleCutoff).length;
-  if (cold) {
-    tips.push({ text: `${cold} produto(s) sem nenhum clique em 30 dias. Troque por outros ou divulgue o link curto deles.` });
-  }
-
-  return tips;
 }

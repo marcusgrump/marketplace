@@ -6,6 +6,7 @@ import { cn } from "cn";
 
 const links = [
   { href: "/admin", label: "Produtos" },
+  { href: "/admin/vitrine", label: "Vitrine automática" },
   { href: "/admin/shopee", label: "Buscar na Shopee" },
   { href: "/admin/configuracoes", label: "Configurações" },
 ];

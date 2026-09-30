@@ -74,6 +74,25 @@ milhares de produtos; o limite prático é o seu tempo de curadoria.
   gravados por função no banco, a única coisa que o público pode executar.
 - A página inicial usa cache com tags e é regerada sempre que você salva algo no painel.
 
+## Banco de dados
+
+Todas as mudanças no banco ficam versionadas em `supabase/migrations/`, na ordem em que foram aplicadas
+(tabelas, funções, regras de segurança e gatilhos). Para recriar o banco num projeto novo do Supabase, rode os
+arquivos em ordem no SQL Editor ou use `supabase db push` com a
+[CLI do Supabase](https://supabase.com/docs/guides/local-development). Depois:
+
+1. Cadastre o usuário do painel em Authentication e adicione o id dele na tabela `admins`.
+2. Copie o `server_token` gerado na tabela `settings` para a variável `SERVER_SECRET` da Vercel.
+3. Ajuste `site_url` na tabela `settings` para o endereço do site (usado para limpar o cache quando algo é
+   editado direto no banco).
+
+Mudanças novas no banco devem virar um arquivo novo nessa pasta, nunca editar um antigo.
+
+## Verificação automática
+
+Todo pull request (e todo push na `main`) roda o workflow `CI` do GitHub Actions: instala as dependências,
+confere os tipos (`tsc`) e faz o build. Só junte na `main` com o CI verde.
+
 ## Variáveis de ambiente
 
 | Variável | Para que serve |
